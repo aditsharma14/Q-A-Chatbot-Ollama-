@@ -11,8 +11,23 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-## Langsmith Tracking (only enabled when an API key is provided in .env)
-langchain_api_key=os.getenv("LANGCHAIN_API_KEY")
+def get_setting(name,default=None):
+    ## Read a setting from Streamlit secrets (used on Streamlit Cloud) or from .env / environment variables (used locally)
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        pass
+    return os.getenv(name,default)
+
+## Ollama server to connect to. Locally this is your own Ollama; when deployed it must be a server reachable from the internet
+OLLAMA_HOST=get_setting("OLLAMA_HOST","http://localhost:11434")
+OLLAMA_API_KEY=get_setting("OLLAMA_API_KEY")
+ollama_headers={"Authorization":f"Bearer {OLLAMA_API_KEY}"} if OLLAMA_API_KEY else None
+ollama_client=ollama.Client(host=OLLAMA_HOST,headers=ollama_headers)
+
+## Langsmith Tracking (only enabled when an API key is provided in .env or Streamlit secrets)
+langchain_api_key=get_setting("LANGCHAIN_API_KEY")
 if langchain_api_key:
     os.environ["LANGCHAIN_API_KEY"]=langchain_api_key
     os.environ["LANGCHAIN_TRACING_V2"]="true"
@@ -30,7 +45,8 @@ prompt=ChatPromptTemplate.from_messages(
 
 def generate_response(question,llm,temperature,max_tokens):
     ## keep_alive keeps the model loaded in memory between questions so it isn't reloaded each time
-    llm=OllamaLLM(model=llm,temperature=temperature,num_predict=max_tokens,keep_alive="30m")
+    llm=OllamaLLM(model=llm,temperature=temperature,num_predict=max_tokens,keep_alive="30m",
+                base_url=OLLAMA_HOST,client_kwargs={"headers":ollama_headers} if ollama_headers else {})
     output_parser=StrOutputParser()
     chain=prompt|llm|output_parser
     ## Stream tokens as they are generated instead of waiting for the full answer
@@ -41,11 +57,13 @@ st.title("Enhanced Q&A Chatbot With Llama 3")
 
 
 ## Select the Ollama model (defaults to llama3)
-## Only offer models that are actually pulled on the local Ollama server
+## Only offer models that are actually available on the Ollama server
 try:
-    installed_models=[m.model for m in ollama.list().models]
+    installed_models=[m.model for m in ollama_client.list().models]
 except Exception:
-    st.error("Could not connect to Ollama. Make sure Ollama is installed and running (`ollama serve`), then refresh this page.")
+    st.error(f"Could not connect to Ollama at `{OLLAMA_HOST}`. Running locally: make sure Ollama is installed and running (`ollama serve`). "
+             "Deployed (e.g. Streamlit Cloud): set `OLLAMA_HOST` (and `OLLAMA_API_KEY` if needed) in the app's secrets to an Ollama server reachable from the internet. "
+             "Then refresh this page.")
     st.stop()
 
 if not installed_models:

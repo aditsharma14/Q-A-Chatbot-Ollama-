@@ -76,11 +76,38 @@ Streamlit opens the app at <http://localhost:8501>.
 3. Adjust **Max Tokens** to set the maximum answer length.
 4. Type your question in the **You:** box and press Enter.
 
+## Deploying to Streamlit Community Cloud
+
+Streamlit Cloud runs the app on its own servers, which have no Ollama. The deployed app has to connect to an Ollama server that is reachable over the internet. Set that server in the app's **Settings → Secrets**:
+
+```toml
+OLLAMA_HOST = "https://your-ollama-server"
+OLLAMA_API_KEY = "..."        # only if the server needs one
+LANGCHAIN_API_KEY = "..."     # optional, for LangSmith tracing
+```
+
+Choose one of these servers:
+
+**Option A: Ollama Cloud (no laptop needed)**
+1. Sign in at [ollama.com](https://ollama.com) and create an API key.
+2. Set `OLLAMA_HOST = "https://ollama.com"` and `OLLAMA_API_KEY = "<your key>"`.
+3. The model dropdown shows the models your Ollama Cloud account can use. These are cloud models, which may not include `llama3`.
+
+**Option B: Expose your own Ollama with ngrok (laptop must stay on)**
+1. Install [ngrok](https://ngrok.com/) and run:
+   ```bash
+   ngrok http 11434 --host-header="localhost:11434"
+   ```
+2. Set `OLLAMA_HOST` to the `https://….ngrok-free.app` URL that ngrok prints.
+3. The app works only while your laptop, Ollama and ngrok are running. Anyone with the URL can use your Ollama, so stop ngrok when you're done.
+
+Locally, you don't need any of this. The app defaults to `http://localhost:11434`.
+
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| "Could not connect to Ollama" | Start Ollama (`ollama serve` or open the Ollama app), then refresh the page. |
+| "Could not connect to Ollama" | **Locally:** start Ollama (`ollama serve` or open the Ollama app), then refresh the page. **On Streamlit Cloud:** set `OLLAMA_HOST` in the app's secrets (see [Deploying](#deploying-to-streamlit-community-cloud)). |
 | "No Ollama models are installed" | Run `ollama pull llama3`, then refresh the page. |
 | `404` / "model not found" | The model is not on the Ollama server the app connects to. Check with `ollama list` and pull it again. |
 | Responses are slow | On a CPU-only machine, `llama3` (8B) generates only a few tokens per second. Lower **Max Tokens**, or use a smaller model such as `llama3.2:3b` or `gemma:2b`. Run `ollama ps` to check whether the model is on CPU or GPU. |
